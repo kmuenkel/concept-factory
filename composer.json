@@ -1,0 +1,51 @@
+{
+    "name": "kmuenkel/concept",
+    "description": "Auto-generate dummy data with realistic relationships per Model-like config classes",
+    "time": "2020-01-26 22:31:00",
+    "authors": [
+        {
+            "name": "Kevin Muenkel",
+            "email": "kevin_tm@yahoo.com"
+        }
+    ],
+    "keywords": [
+        "testing",
+        "generator",
+        "eloquent",
+        "laravel"
+    ],
+    "type": "project",
+    "require": {
+        "php": ">=7.0.0",
+        "illuminate/database": "~5.1"
+    },
+    "require-dev": {
+        "mpociot/laravel-test-factory-helper": "^1.2",
+        "phpunit/phpunit": "^7.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Concept\\": "src/"
+        },
+        "files": [
+            "src/helpers.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Concept\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "preferred-install": "dist"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Concept\\Providers\\ConceptServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
