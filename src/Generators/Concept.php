@@ -4,7 +4,9 @@ namespace Concept\Generators;
 
 use Arr;
 use Str;
+use InvalidArgumentException;
 use UnexpectedValueException;
+use Illuminate\Support\Collection;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations;
@@ -55,6 +57,7 @@ abstract class Concept
     public function __construct(array $attributes = [])
     {
         $attributes && $this->setAttributes($attributes);
+        $this->attributes = $this->attributes();
     }
 
     /**
@@ -66,6 +69,14 @@ abstract class Concept
         $this->attributes = $attributes;
 
         return $this;
+    }
+
+    /**
+     * @return array
+     */
+    public function attributes()
+    {
+        return $this->attributes;
     }
 
     /**
@@ -107,16 +118,30 @@ abstract class Concept
      */
     public function create()
     {
-        $this->model = $this->createFirstFromFactory($this->modelName, $this->attributes);
+        $model = $this->createModel();
 
         foreach ($this->load() as $relationName => $relationAlias) {
             $relationName = is_int($relationName) ? $relationAlias : $relationName;
             $relatedModel = $this->createRelationship($relationName, $relationAlias);
-            relate_models($this->model, $relatedModel, $relationName);
+            relate_models($model, $relatedModel, $relationName);
             $this->modelLibrary[$relationAlias] = $relatedModel;
         }
 
-        return $this->getModel();
+        return $model;
+    }
+
+    /**
+     * @return Model
+     */
+    protected function createModel()
+    {
+        if ($this->model) {
+            return tap($this->model, function (Model $model) {
+                $model->update($this->attributes);
+            });
+        }
+
+        return $this->model = $this->createFirstFromFactory($this->modelName, $this->attributes);
     }
 
     /**
@@ -236,7 +261,7 @@ abstract class Concept
      */
     public function appendLibrary(Concept $concept)
     {
-        $this->modelLibrary = array_merge($this->modelLibrary, $concept->getModelLibrary());
+        $this->modelLibrary = array_merge($this->modelLibrary, $concept->getModelLibrary()->all());
 
         return $this;
     }
@@ -253,11 +278,11 @@ abstract class Concept
     }
 
     /**
-     * @return Model[]
+     * @return Model[]|Collection
      */
     public function getModelLibrary()
     {
-        return $this->modelLibrary;
+        return collect($this->modelLibrary);
     }
 
     /**
@@ -265,6 +290,22 @@ abstract class Concept
      */
     public function getModel()
     {
-        return $this->model;
+        return $this->model ?: $this->createModel();
+    }
+
+    /**
+     * @param Model $model
+     * @return $this
+     */
+    public function setModel(Model $model)
+    {
+        if (!($model instanceof $this->modelName)) {
+            throw new InvalidArgumentException("Model must be an instance of $this->modelName. "
+                .get_class($model).' given.');
+        }
+
+        $this->model = $model;
+
+        return $this;
     }
 }
