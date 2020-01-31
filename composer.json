@@ -1,5 +1,5 @@
 {
-    "name": "kmuenkel/concept",
+    "name": "kmuenkel/concept-factory",
     "description": "Auto-generate dummy data with realistic relationships per Model-like config classes",
     "time": "2020-01-26 22:31:00",
     "authors": [
