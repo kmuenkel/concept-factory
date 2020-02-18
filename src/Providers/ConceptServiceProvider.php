@@ -42,7 +42,7 @@ class ConceptServiceProvider extends ServiceProvider
     protected function registerConceptNames()
     {
         $path = config('concepts.path');
-        $path && load($path, Concept::class, function (Concept $concept) {
+        $path && register_classes($path, Concept::class, function (Concept $concept) {
             Concept::register($concept);
         });
 

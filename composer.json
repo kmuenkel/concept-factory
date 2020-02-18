@@ -18,7 +18,9 @@
     "type": "library",
     "require": {
         "php": ">=7.0.0",
-        "illuminate/database": "~5.1"
+        "ext-json": "*"
+        "illuminate/database": "^5.0",
+        "symfony/finder": "^3.4|^4.0|^5.0",
     },
     "require-dev": {
         "mpociot/laravel-test-factory-helper": "^1.2",

@@ -2,11 +2,8 @@
 
 namespace Concept\Generators;
 
-use Arr;
-use Str;
 use InvalidArgumentException;
 use UnexpectedValueException;
-use Illuminate\Support\Collection;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations;
@@ -56,8 +53,8 @@ abstract class Concept
      */
     public function __construct(array $attributes = [])
     {
-        $attributes && $this->setAttributes($attributes);
-        $this->attributes = $this->attributes();
+        $attributes = array_merge($this->attributes(), $attributes);
+        $this->setAttributes($attributes);
     }
 
     /**
@@ -93,7 +90,11 @@ abstract class Concept
      */
     public function getName()
     {
-        return Str::snake(class_basename(static::class), '-');
+        $className = basename(str_replace('\\', '/', static::class));
+        $name = preg_replace('/(.)(?=[A-Z])/u', '$1-', $className);
+        $name = strtolower($name);
+
+        return $name;
     }
 
     /**
@@ -102,7 +103,7 @@ abstract class Concept
      */
     public static function findInRegistry($name)
     {
-        return Arr::get(self::$registry, $name);
+        return self::$registry[$name] ?? null;
     }
 
     /**
@@ -114,34 +115,37 @@ abstract class Concept
     }
 
     /**
+     * @param array $attributes
      * @return Model
      */
-    public function create()
+    public function create(array $attributes = [])
     {
-        $model = $this->createModel();
+        $attributes = array_merge($this->attributes(), $attributes);
+        $model = $this->createModel($attributes);
 
         foreach ($this->load() as $relationName => $relationAlias) {
             $relationName = is_int($relationName) ? $relationAlias : $relationName;
             $relatedModel = $this->createRelationship($relationName, $relationAlias);
             relate_models($model, $relatedModel, $relationName);
-            $this->modelLibrary[$relationAlias] = $relatedModel;
+            $this->appendLibrary($relatedModel, $relationAlias);
         }
 
         return $model;
     }
 
     /**
+     * @param array $attributes
      * @return Model
      */
-    protected function createModel()
+    protected function createModel(array $attributes = [])
     {
         if ($this->model) {
-            return tap($this->model, function (Model $model) {
-                $model->update($this->attributes);
-            });
+            $this->model->update($attributes);
+
+            return $this->model;
         }
 
-        return $this->model = $this->createFirstFromFactory($this->modelName, $this->attributes);
+        return $this->model = $this->createFirstFromFactory($this->modelName, $attributes);
     }
 
     /**
@@ -174,18 +178,31 @@ abstract class Concept
      */
     public function getFromLibrary($relationName)
     {
-        /** @var Model|null $relatedModel */
-        $relatedModel = Arr::get($this->modelLibrary, $relationName);
+        $relatedModel = $this->modelLibrary[$relationName] ?? null;
 
         return $relatedModel;
     }
 
     /**
      * @param string $relationName
+     * @param array $attributes
+     * @return Model|null
+     */
+    public function createFromLibrary($relationName, array $attributes = [])
+    {
+        $relatedModel = clone $this->getFromLibrary($relationName);
+        $attributes && $relatedModel->update($attributes);
+
+        return $relatedModel;
+    }
+
+    /**
+     * @param string $relationName
+     * @param array $attributes
      * @param bool $includeLibrary
      * @return Model|null
      */
-    public function createFromRelatedConcept($relationName, $includeLibrary = true)
+    public function createFromRelatedConcept($relationName, array $attributes = [], $includeLibrary = true)
     {
         if (!method_exists($this, $relationName)) {
             return null;
@@ -204,21 +221,23 @@ abstract class Concept
 
         $concept = $concept->setModelLibrary($includeLibrary ? $this->modelLibrary : []);
         $relatedModel = $concept->create();
-        $includeLibrary && $this->appendLibrary($concept);
+        $attributes && $relatedModel->update($attributes);
+        $includeLibrary && $this->mergeLibrary($concept);
 
         return $relatedModel;
     }
 
     /**
      * @param string $relationName
+     * @param array $attributes
      * @return Model
      */
-    public function createFromFactory($relationName)
+    public function createFromFactory($relationName, array $attributes = [])
     {
         /** @var Relations\Relation $relation */
         $relation = $this->model->$relationName();
         $relationModelName = get_class($relation->getModel());
-        $relatedModel = $this->createFirstFromFactory($relationModelName);
+        $relatedModel = $this->createFirstFromFactory($relationModelName, $attributes);
 
         return $relatedModel;
     }
@@ -259,9 +278,10 @@ abstract class Concept
      * @param Concept $concept
      * @return $this
      */
-    public function appendLibrary(Concept $concept)
+    public function mergeLibrary(Concept $concept)
     {
-        $this->modelLibrary = array_merge($this->modelLibrary, $concept->getModelLibrary()->all());
+        $relatedLibrary = $concept->getModelLibrary();
+        $this->modelLibrary = array_merge($this->modelLibrary, $relatedLibrary);
 
         return $this;
     }
@@ -278,11 +298,23 @@ abstract class Concept
     }
 
     /**
-     * @return Model[]|Collection
+     * @param Model $relatedModel
+     * @param string $relationAlias
+     * @return $this
+     */
+    public function appendLibrary(Model $relatedModel, $relationAlias)
+    {
+        $this->modelLibrary[$relationAlias] = $relatedModel;
+
+        return $this;
+    }
+
+    /**
+     * @return Model[]
      */
     public function getModelLibrary()
     {
-        return collect($this->modelLibrary);
+        return $this->modelLibrary;
     }
 
     /**
