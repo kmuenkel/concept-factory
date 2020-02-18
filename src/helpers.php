@@ -37,25 +37,18 @@ if (!function_exists('get_classes')) {
     function get_classes($paths, $parentClassName = null)
     {
         $paths = array_unique((array)$paths);
-        $paths = array_filter($paths, function ($path) {
-            return is_dir($path);
-        });
-
-        if (empty($paths)) {
-            return [];
-        }
-
         $namespace = get_namespace();
         $appPath = realpath(app_path()).DIRECTORY_SEPARATOR;
-        $pattern = preg_quote($appPath, '/');
+        $delimiter = '/';
+        $pattern = preg_quote($appPath, $delimiter);
         $files = (new Finder)->in($paths)->files();
         $classNames = [];
 
         /** @var SplFileInfo $fileInfo */
         foreach ($files as $fileInfo) {
             $fullPath = $fileInfo->getPathname();
-            $fileName = preg_replace("/^$pattern/", '', $fullPath);
-            $className = $namespace.str_replace(['/', '.php'], ['\\', ''], $fileName);
+            $fileName = preg_replace("$delimiter^$pattern$delimiter", '', $fullPath);
+            $className = $namespace.str_replace([DIRECTORY_SEPARATOR, '.php'], ['\\', ''], $fileName);
 
             try {
                 $isAbstract = (new ReflectionClass($className))->isAbstract();
