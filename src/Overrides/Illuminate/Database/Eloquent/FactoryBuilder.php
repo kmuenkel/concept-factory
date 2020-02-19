@@ -2,7 +2,6 @@
 
 namespace Concept\Overrides\Illuminate\Database\Eloquent;
 
-use Arr;
 use Illuminate\Database\Eloquent\FactoryBuilder as BaseFactoryBuilder;
 
 /**
@@ -47,9 +46,13 @@ class FactoryBuilder extends BaseFactoryBuilder
      */
     public function getLastUsedSource()
     {
-        [$class, $name] = $this->lastDefinitionUsed;
-        $sources = Arr::dot($this->sources);
-        $location = Arr::get($sources, "$class.$name");
+        /**
+         * @var string $class
+         * @var string $name
+         */
+        list($class, $name) = $this->lastDefinitionUsed;
+        $location = $sources[$class] ?? [];
+        $location = $location[$name] ?? null;
 
         return compact('class', 'name', 'location');
     }
