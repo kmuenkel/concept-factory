@@ -3,6 +3,7 @@
 namespace Concept\Providers;
 
 use Concept\Generators\Concept;
+use Concept\Generators\ConceptCommand;
 use Faker\Generator as FakerGenerator;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Contracts\Foundation\Application;
@@ -34,6 +35,19 @@ class ConceptServiceProvider extends ServiceProvider
     {
         $this->registerConceptNames();
         $this->registerModelFactoryOverrides();
+        $this->setEventCallback();
+    }
+
+    /**
+     * @void
+     */
+    protected function setEventCallback()
+    {
+        $callback = function (Concept $concept) {
+            event('concept.created', [$concept]);
+        };
+
+        ConceptCommand::setCallback($callback);
     }
 
     /**

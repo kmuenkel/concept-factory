@@ -3,6 +3,7 @@
 namespace Concept\Generators;
 
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class GeneratorCommand
@@ -15,6 +16,19 @@ class ConceptCommand extends Command
         {--list : List all possible concepts that can be generated}';
 
     /**
+     * @var callable|null
+     */
+    protected static $eventCallback = null;
+
+    /**
+     * @param callable $callback
+     */
+    public static function setCallback(callable $callback)
+    {
+        self::$eventCallback = $callback;
+    }
+
+    /**
      * @void
      */
     public function handle()
@@ -24,23 +38,30 @@ class ConceptCommand extends Command
 
         if (!$class || $this->option('list')) {
             $this->list();
-        } else {
-            $this->generate($class);
+            return;
         }
+
+        $concept = $this->generate($class);
+        $model = $concept->getModel();
+        $table = $model->getTable();
+        $keyName = $model->getKeyName();
+        $key = $model->getKey();
+
+        self::$eventCallback && (self::$eventCallback)($concept);
+        $this->info(PHP_EOL."Created '$table' record where '$keyName' = '$key'.".PHP_EOL);
     }
 
     /**
-     * @param string $class
+     * @param $class
+     * @return Concept
      */
     protected function generate($class)
     {
         /** @var Concept $concept */
         $concept = app($class);
-        $model = $concept->create();
-        $table = $model->getTable();
-        $keyName = $model->getKeyName();
-        $key = $model->getKey();
-        $this->info(PHP_EOL."Created '$table' record where '$keyName' = '$key'.".PHP_EOL);
+        $concept->create();
+
+        return $concept;
     }
 
     /**

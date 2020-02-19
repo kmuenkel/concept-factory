@@ -4,6 +4,7 @@ namespace Concept\Generators;
 
 use InvalidArgumentException;
 use UnexpectedValueException;
+use Concept\Logging\ConceptBucket;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations;
@@ -48,6 +49,11 @@ abstract class Concept
     protected $modelLibrary = [];
 
     /**
+     * @var ConceptBucket
+     */
+    protected $bucket;
+
+    /**
      * Concept constructor.
      * @param array $attributes
      */
@@ -55,6 +61,8 @@ abstract class Concept
     {
         $attributes = array_merge($this->attributes(), $attributes);
         $this->setAttributes($attributes);
+
+        $this->bucket = ConceptBucket::make();
     }
 
     /**
@@ -126,11 +134,28 @@ abstract class Concept
         foreach ($this->load() as $relationName => $relationAlias) {
             $relationName = is_int($relationName) ? $relationAlias : $relationName;
             $relatedModel = $this->createRelationship($relationName, $relationAlias);
-            relate_models($model, $relatedModel, $relationName);
+            $this->relateModels($model, $relatedModel, $relationName);
             $this->appendLibrary($relatedModel, $relationAlias);
         }
 
         return $model;
+    }
+
+    /**
+     * @param Model $model
+     * @param Model $relatedModel
+     * @param string $relationName
+     * @return $this
+     */
+    public function relateModels(Model $model, Model $relatedModel, $relationName)
+    {
+        $before = $model->getAttributes();
+        relate_models($model, $relatedModel, $relationName);
+        $after = $model->getAttributes();
+
+        $this->bucket->addAction($model, $before, $after);
+
+        return $this;
     }
 
     /**
@@ -256,6 +281,7 @@ abstract class Concept
             /** @var Model $relatedModel */
             $model = $factoryBuilder->make($attributes);
             $model = ($model instanceof EloquentCollection) ? $model->first() : $model;
+            $this->bucket->addAction($model);
             $model->save();
         } catch (QueryException $error) {
             if (!in_array($error->getCode(), [

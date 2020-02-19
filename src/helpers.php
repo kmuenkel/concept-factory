@@ -152,7 +152,7 @@ if (!function_exists('relate_models')) {
 
         if ($relation instanceof Relations\BelongsTo) {
             $relation->associate($relatedModel);
-            $suppressEvents ? $model::withoutEvents($save($model)) : $save($model);
+            $suppressEvents ? $model::withoutEvents($save($model)) : $save($model)();
         } elseif ($relation instanceof Relations\HasOneOrMany) {
             $foreignKeyName = $relation->getForeignKeyName();
             $localKeyName = $relation->getLocalKeyName();
@@ -165,7 +165,7 @@ if (!function_exists('relate_models')) {
                 $relatedModel->$morphTypeField = $morphType;
             }
 
-            $suppressEvents ? $relatedModel::withoutEvents($save($relatedModel)) : $save($relatedModel);
+            $suppressEvents ? $relatedModel::withoutEvents($save($relatedModel)) : $save($relatedModel)();
 
             $relationship = ($relation instanceof Relations\HasMany || $relation instanceof Relations\MorphMany) ?
                 new EloquentCollection([$relatedModel]) : $relatedModel;
@@ -174,6 +174,36 @@ if (!function_exists('relate_models')) {
             $relation->attach($relatedModel);
         } else {
             throw new InvalidArgumentException('Unsupported relation type ' . get_class($relation));
+        }
+    }
+}
+
+if (!function_exists('detach_delete')) {
+    /**
+     * @param Model $model
+     * @param bool $forceDelete
+     * @param bool $suppressEvents
+     */
+    function detach_delete(Model $model, $forceDelete = false, $suppressEvents = true)
+    {
+        $relationNames = array_keys($model->getRelations());
+
+        foreach ($relationNames as $relationName) {
+            /** @var Relations\Relation $relation */
+            $relation = $model->$relationName();
+            if ($relation instanceof Relations\BelongsToMany) {
+                $relation->sync([]);
+            }
+
+            $save = function (Model $model) use ($forceDelete) {
+                return function () use ($model, $forceDelete) {
+                    $model::unguarded(function () use ($model, $forceDelete) {
+                        $forceDelete ? $model->forceDelete() : $model->delete();
+                    });
+                };
+            };
+
+            $suppressEvents ? $model::withoutEvents($save($model)) : $save($model)();
         }
     }
 }
