@@ -125,13 +125,13 @@ if (!function_exists('relate_models')) {
      * @param Model $model
      * @param Model $relatedModel
      * @param string $relationName
-     * @param bool $suppressEvents
      */
-    function relate_models(Model $model, Model $relatedModel, $relationName, $suppressEvents = true)
+    function relate_models(Model $model, Model $relatedModel, $relationName)
     {
         /** @var Relations\Relation $relation */
         $relation = $model->$relationName();
         $expectedModel = $relation->getModel();
+
         if (!($relatedModel instanceof $expectedModel)) {
             $relation = get_class($model)."::$relationName()";
             $expectedModel = get_class($expectedModel);
@@ -142,34 +142,11 @@ if (!function_exists('relate_models')) {
             );
         }
 
-        $save = function (Model $model) {
-            return function () use ($model) {
-                $model::unguarded(function () use ($model) {
-                    $model->save();
-                });
-            };
-        };
-
         if ($relation instanceof Relations\BelongsTo) {
             $relation->associate($relatedModel);
-            $suppressEvents ? $model::withoutEvents($save($model)) : $save($model)();
+            $model->save();
         } elseif ($relation instanceof Relations\HasOneOrMany) {
-            $foreignKeyName = $relation->getForeignKeyName();
-            $localKeyName = $relation->getLocalKeyName();
-            $localKey = $model->getAttribute($localKeyName);
-            $relatedModel->$foreignKeyName = $localKey;
-
-            if ($relation instanceof Relations\MorphOneOrMany) {
-                $morphTypeField = $relation->getMorphType();
-                $morphType = $relation->getMorphClass();
-                $relatedModel->$morphTypeField = $morphType;
-            }
-
-            $suppressEvents ? $relatedModel::withoutEvents($save($relatedModel)) : $save($relatedModel)();
-
-            $relationship = ($relation instanceof Relations\HasMany || $relation instanceof Relations\MorphMany) ?
-                new EloquentCollection([$relatedModel]) : $relatedModel;
-            $model->setRelation($relationName, $relationship);
+            $relation->save($relatedModel);
         } elseif ($relation instanceof Relations\BelongsToMany) {
             $relation->attach($relatedModel);
         } else {
@@ -182,28 +159,20 @@ if (!function_exists('detach_delete')) {
     /**
      * @param Model $model
      * @param bool $forceDelete
-     * @param bool $suppressEvents
      */
-    function detach_delete(Model $model, $forceDelete = false, $suppressEvents = true)
+    function detach_delete(Model $model, $forceDelete = false)
     {
         $relationNames = array_keys($model->getRelations());
 
         foreach ($relationNames as $relationName) {
             /** @var Relations\Relation $relation */
             $relation = $model->$relationName();
+
             if ($relation instanceof Relations\BelongsToMany) {
                 $relation->sync([]);
             }
 
-            $save = function (Model $model) use ($forceDelete) {
-                return function () use ($model, $forceDelete) {
-                    $model::unguarded(function () use ($model, $forceDelete) {
-                        $forceDelete ? $model->forceDelete() : $model->delete();
-                    });
-                };
-            };
-
-            $suppressEvents ? $model::withoutEvents($save($model)) : $save($model)();
+            $forceDelete ? $model->forceDelete() : $model->delete();
         }
     }
 }
