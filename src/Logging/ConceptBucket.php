@@ -98,17 +98,13 @@ class ConceptBucket
              */
             list($model, $before, $after) = $action;
 
-            $save = function (Model $model) use ($before) {
-                return function () use ($model, $before) {
-                    $model::unguarded(function () use ($model, $before) {
+            $save = function (Model $model) use ($before, $suppressEvents) {
+                return function () use ($model, $before, $suppressEvents) {
+                    $model::unguarded(function () use ($model, $before, $suppressEvents) {
                         $before ? $model->update($before) : detach_delete($model, true, $suppressEvents);
                     });
                 };
             };
-
-            $model::unguarded(function () use ($model, $before) {
-                $model->update($before);
-            });
 
             $suppressEvents ? $model::withoutEvents($save($model)) : $save($model);
         }
