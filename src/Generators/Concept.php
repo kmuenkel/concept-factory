@@ -296,7 +296,7 @@ abstract class Concept
      * @param string $relationName
      * @param array $attributes
      * @param int|null $index
-     * @return Model|null
+     * @return Model|EloquentCollection|null
      */
     public function createFromLibrary($relationName, array $attributes = [], ?int $index = 0)
     {
