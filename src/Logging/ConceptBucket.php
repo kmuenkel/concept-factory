@@ -21,12 +21,19 @@ class ConceptBucket
     protected $actions = [];
 
     /**
-     * @param bool $fresh
+     * ConceptBucket constructor.
+     */
+    protected function __construct()
+    {
+        self::$bucket = $this;
+    }
+
+    /**
      * @return static
      */
-    public static function make($fresh = false)
+    public static function make()
     {
-        return self::$bucket = (self::$bucket && !$fresh) ? self::$bucket : new static;
+        return self::$bucket ?: new static;
     }
 
     /**

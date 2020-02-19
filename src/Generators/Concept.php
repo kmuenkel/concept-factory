@@ -2,6 +2,7 @@
 
 namespace Concept\Generators;
 
+use BadMethodCallException;
 use InvalidArgumentException;
 use UnexpectedValueException;
 use Concept\Logging\ConceptBucket;
@@ -136,14 +137,19 @@ abstract class Concept
      */
     public function create(array $attributes = [])
     {
-        $attributes = array_merge($this->attributes(), $attributes);
-        $model = $this->createModel($attributes);
+        $relatedModels = [];
 
         foreach ($this->load() as $relationName => $relationAlias) {
             $relationName = is_int($relationName) ? $relationAlias : $relationName;
-            $relatedModel = $this->createRelationship($relationName, $relationAlias);
+            $relatedModels[$relationName] = $this->createRelationship($relationName, $relationAlias);
+            $this->appendLibrary($relatedModels[$relationName], $relationAlias);
+        }
+
+        $attributes = array_merge($this->attributes(), $attributes);
+        $model = $this->createModel($attributes);
+
+        foreach ($relatedModels as $relationName => $relatedModel) {
             $this->relateModels($model, $relatedModel, $relationName);
-            $this->appendLibrary($relatedModel, $relationAlias);
         }
 
         return $model;
@@ -158,7 +164,11 @@ abstract class Concept
     public function relateModels(Model $model, Model $relatedModel, $relationName)
     {
         $before = $model->getAttributes();
-        relate_models($model, $relatedModel, $relationName);
+        try {
+            relate_models($model, $relatedModel, $relationName);
+        } catch (BadMethodCallException $error) {
+            //
+        }
         $after = $model->getAttributes();
 
         $this->bucket->addAction($model, $before, $after);

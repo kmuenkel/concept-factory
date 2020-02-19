@@ -95,7 +95,7 @@ if (!function_exists('base_path')) {
     }
 }
 
-if (!function_exists('base_path')) {
+if (!function_exists('get_namespace')) {
     /**
      * @return string
      * @see Illuminate\Foundation\Application::getNamespace()
