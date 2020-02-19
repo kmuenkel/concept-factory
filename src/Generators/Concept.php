@@ -437,12 +437,18 @@ abstract class Concept
     }
 
     /**
-     * @param Model $relatedModel
+     * @param Model|EloquentCollection $relatedModel
      * @param string $relationAlias
      * @return $this
      */
-    public function appendLibrary(Model $relatedModel, $relationAlias)
+    public function appendLibrary($relatedModel, $relationAlias)
     {
+        if (!($relatedModel instanceof Model) && !($relatedModel instanceof EloquentCollection)) {
+            $type = (($type = gettype($relatedModel) == 'object') ? get_class($relatedModel) : $type;
+            throw new InvalidArgumentException('First argument must be an instance of '.Model::class. ' or '
+                .EloquentCollection::class.". '$type' given.");
+        }
+
         $this->modelLibrary[$relationAlias] = $relatedModel;
 
         return $this;
