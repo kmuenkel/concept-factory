@@ -244,11 +244,10 @@ abstract class Concept
      */
     public function createRelationships($relationName, $relationAlias = null)
     {
-        /** @var Relations\Relation $relation */
-        $relation = $this->getModel()->$relationName();
-        $isMany = ($relation instanceof Relations\HasMany
+        $relation = $this->getModelRelation($this->getModel(), $relationName);
+        $isMany = ($relation && ($relation instanceof Relations\HasMany
             || $relation instanceof Relations\MorphMany
-            || $relation instanceof Relations\BelongsToMany);
+            || $relation instanceof Relations\BelongsToMany));
 
         $collection = new EloquentCollection;
         $counter = $this->instances ?: ($isMany ? 2 : 1);
@@ -260,6 +259,23 @@ abstract class Concept
         } while ($isMany && --$counter);
 
         return $isMany ? $collection : $collection->first();
+    }
+
+    /**
+     * @param Model $model
+     * @param string $relationName
+     * @return Relations\Relation|null
+     */
+    protected function getModelRelation(Model $model, $relationName)
+    {
+        try {
+            /** @var Relations\Relation $relation */
+            $relation = $this->getModel()->$relationName();
+        } catch (BadMethodCallException $error) {
+            $relation = null;
+        }
+
+        return $relation;
     }
 
     /**
@@ -350,14 +366,16 @@ abstract class Concept
     /**
      * @param string $relationName
      * @param array $attributes
-     * @return Model
+     * @return Model|null
      */
     public function createFromFactory($relationName, array $attributes = [])
     {
-        /** @var Relations\Relation $relation */
-        $relation = $this->getModel()->$relationName();
-        $relationModelName = get_class($relation->getModel());
-        $relatedModel = $this->createFirstFromFactory($relationModelName, $attributes);
+        $relatedModel = null;
+
+        if ($relation = $this->getModelRelation($this->getModel(), $relationName)) {
+            $relationModelName = get_class($relation->getModel());
+            $relatedModel = $this->createFirstFromFactory($relationModelName, $attributes);
+        }
 
         return $relatedModel;
     }
