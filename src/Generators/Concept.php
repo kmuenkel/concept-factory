@@ -355,7 +355,7 @@ abstract class Concept
     public function createFromFactory($relationName, array $attributes = [])
     {
         /** @var Relations\Relation $relation */
-        $relation = $this->model->$relationName();
+        $relation = $this->getModel()->$relationName();
         $relationModelName = get_class($relation->getModel());
         $relatedModel = $this->createFirstFromFactory($relationModelName, $attributes);
 
