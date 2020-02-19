@@ -66,6 +66,14 @@ abstract class Concept
     }
 
     /**
+     * @return ConceptBucket
+     */
+    public function getActionLog()
+    {
+        return $this->bucket;
+    }
+
+    /**
      * @param array $attributes
      * @return $this
      */

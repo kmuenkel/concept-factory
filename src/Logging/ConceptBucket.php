@@ -38,12 +38,12 @@ class ConceptBucket
     public function addAction(Model $model, array $before = null, array $after = null)
     {
         $dirty = !is_null($after) ? $after : $model->getDirty();
-        $clean = !is_null($before) ? $before : $model->getAttributes();
+        $clean = !is_null($before) ? $before : $model->getOriginal();
 
         $dirty = array_diff_assoc($dirty, $clean);
         $clean = array_intersect_key($dirty, $clean);
 
-        $actions[] = [
+        $dirty != $clean && $actions[] = [
             'model' => $model,
             'before' => $clean,
             'after' => $dirty
