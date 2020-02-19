@@ -56,13 +56,9 @@ abstract class Concept
 
     /**
      * Concept constructor.
-     * @param array $attributes
      */
-    public function __construct(array $attributes = [])
+    public function __construct()
     {
-        $attributes = array_merge($this->attributes(), $attributes);
-        $this->setAttributes($attributes);
-
         $this->bucket = ConceptBucket::make();
     }
 
