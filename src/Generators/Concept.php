@@ -406,6 +406,9 @@ abstract class Concept
             }
 
             $source = $factoryBuilder->getLastUsedSource();
+            $source = array_map(function ($item) {
+                return (string)$item;
+            }, $source);
 
             throw InvalidDefinitionException::make($source['class'], $source['name'], $source['location'], $error);
         }

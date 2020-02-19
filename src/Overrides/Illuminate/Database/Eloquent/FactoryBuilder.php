@@ -51,7 +51,7 @@ class FactoryBuilder extends BaseFactoryBuilder
          * @var string $name
          */
         list($class, $name) = $this->lastDefinitionUsed;
-        $location = $sources[$class] ?? [];
+        $location = $this->sources[$class] ?? [];
         $location = $location[$name] ?? null;
 
         return compact('class', 'name', 'location');
