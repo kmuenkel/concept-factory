@@ -90,10 +90,9 @@ class ConceptBucket
     }
 
     /**
-     * @param bool $suppressEvents
      * @return $this
      */
-    public function rollback($suppressEvents = true)
+    public function rollback()
     {
         $actions = array_reverse($this->flushActions());
 
@@ -101,19 +100,12 @@ class ConceptBucket
             /**
              * @var Model $model
              * @var array $before
-             * @var array $ater
              */
-            list($model, $before, $after) = $action;
+            list('model' => $model, 'before' => $before) = $action;
 
-            $save = function (Model $model) use ($before, $suppressEvents) {
-                return function () use ($model, $before, $suppressEvents) {
-                    $model::unguarded(function () use ($model, $before, $suppressEvents) {
-                        $before ? $model->update($before) : detach_delete($model, true, $suppressEvents);
-                    });
-                };
-            };
-
-            $suppressEvents ? $model::withoutEvents($save($model)) : $save($model);
+            $model::unguarded(function () use ($model, $before) {
+                $before ? $model->update($before) : detach_delete($model, true);
+            });
         }
 
         return $this;
