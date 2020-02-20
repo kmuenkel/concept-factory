@@ -147,6 +147,14 @@ if (!function_exists('relate_models')) {
             $model->save();
         } elseif ($relation instanceof Relations\HasOneOrMany) {
             $relation->save($relatedModel);
+
+            $relationships = $model->relationLoaded($relationName) ? $model->getRelation($relationName)
+                : new EloquentCollection;
+            $relationships = ($relationships instanceof Model) ? new EloquentCollection([$relationships])
+                : $relationships;
+            $relationships->push($relatedModel);
+
+            $relation->match([$model], $relationships, $relationName);
         } elseif ($relation instanceof Relations\BelongsToMany) {
             $relation->attach($relatedModel);
         } else {

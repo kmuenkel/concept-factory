@@ -170,7 +170,7 @@ abstract class Concept
                 continue;
             }
 
-            $relatedModel->each(function ($relatedModel, $relationName) use ($model) {
+            $relatedModel->each(function ($relatedModel) use ($model, $relationName) {
                 $this->relateModel($model, $relatedModel, $relationName);
             });
         }
