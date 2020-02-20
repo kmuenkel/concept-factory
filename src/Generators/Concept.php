@@ -154,10 +154,22 @@ abstract class Concept
     public function create(array $attributes = [])
     {
         $relatedModels = $this->loadRelations($this->load());
-        $attributes = array_merge($this->attributes(), $attributes);
-        $model = $this->createFirstFromFactory($this->modelName, $attributes);
-        $this->setModel($model);
+        $model = $this->createOrUpdate($attributes);
         $this->relateModels($model, $relatedModels);
+
+        return $model;
+    }
+
+    /**
+     * @param array $attributes
+     * @return Model
+     */
+    public function createOrUpdate(array $attributes = [])
+    {
+        $attributes = array_merge($this->attributes(), $attributes);
+        $model = $this->model->exists ? $this->model : $this->createFirstFromFactory($this->modelName, $attributes);
+        $model->update($attributes);
+        $this->setModel($model);
 
         return $model;
     }
@@ -225,6 +237,17 @@ abstract class Concept
     public function load()
     {
         return $this->load;
+    }
+
+    /**
+     * @param string[] $load
+     * @return $this
+     */
+    public function setLoad(array $load)
+    {
+        $this->load = $load;
+
+        return $this;
     }
 
     /**
