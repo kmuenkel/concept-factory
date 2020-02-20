@@ -48,7 +48,7 @@ class ConceptBucket
         $clean = !is_null($before) ? $before : $model->getOriginal();
 
         $dirty = array_diff_assoc($dirty, $clean);
-        $clean = array_intersect_key($dirty, $clean);
+        $clean = array_intersect_key($clean, $dirty);
 
         $dirty != $clean && $this->actions[] = [
             'model' => $model,

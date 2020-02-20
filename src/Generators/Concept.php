@@ -206,7 +206,7 @@ abstract class Concept
      */
     public function relateModel(Model $model, Model $relatedModel, $relationName)
     {
-        $before = $model->getAttributes();
+        $before = $model->refresh()->getAttributes();
         try {
             relate_models($model, $relatedModel, $relationName);
         } catch (BadMethodCallException $error) {
