@@ -50,7 +50,7 @@ class ConceptBucket
         $dirty = array_diff_assoc($dirty, $clean);
         $clean = array_intersect_key($dirty, $clean);
 
-        $dirty != $clean && $actions[] = [
+        $dirty != $clean && $this->actions[] = [
             'model' => $model,
             'before' => $clean,
             'after' => $dirty

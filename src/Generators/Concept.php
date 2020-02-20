@@ -61,10 +61,14 @@ abstract class Concept
 
     /**
      * Concept constructor.
+     * @param array $attributes
      */
-    public function __construct()
+    public function __construct(array $attributes = null)
     {
         $this->bucket = ConceptBucket::make();
+        $this->attributes = !is_null($attributes) ? $attributes : $this->attributes;
+        $placeholderModel = app($this->modelName);
+        $this->setModel($placeholderModel);
     }
 
     /**
@@ -151,7 +155,8 @@ abstract class Concept
     {
         $relatedModels = $this->loadRelations($this->load());
         $attributes = array_merge($this->attributes(), $attributes);
-        $model = $this->createModel($attributes);
+        $model = $this->createFirstFromFactory($this->modelName, $attributes);
+        $this->setModel($model);
         $this->relateModels($model, $relatedModels);
 
         return $model;
@@ -189,7 +194,7 @@ abstract class Concept
             $relatedModels[$relationName] = $this->createRelationships($relationName, $relationAlias);
             $this->appendLibrary($relatedModels[$relationName], $relationAlias);
         }
-
+        ;
         return $relatedModels;
     }
 
@@ -215,21 +220,6 @@ abstract class Concept
     }
 
     /**
-     * @param array $attributes
-     * @return Model
-     */
-    protected function createModel(array $attributes = [])
-    {
-        if ($this->model) {
-            $this->model->update($attributes);
-
-            return $this->model;
-        }
-
-        return $this->model = $this->createFirstFromFactory($this->modelName, $attributes);
-    }
-
-    /**
      * @return string[]
      */
     public function load()
@@ -246,8 +236,8 @@ abstract class Concept
     {
         $relation = $this->getModelRelation($this->getModel(), $relationName);
         $isMany = ($relation && ($relation instanceof Relations\HasMany
-            || $relation instanceof Relations\MorphMany
-            || $relation instanceof Relations\BelongsToMany));
+                || $relation instanceof Relations\MorphMany
+                || $relation instanceof Relations\BelongsToMany));
 
         $collection = new EloquentCollection;
         $counter = $this->instances ?: ($isMany ? 2 : 1);
@@ -270,7 +260,7 @@ abstract class Concept
     {
         try {
             /** @var Relations\Relation $relation */
-            $relation = $this->getModel()->$relationName();
+            $relation = $model->$relationName();
         } catch (BadMethodCallException $error) {
             $relation = null;
         }
@@ -288,10 +278,27 @@ abstract class Concept
         $relationAlias = $relationAlias ?: $relationName;
 
         $relatedModel = $this->getFromLibrary($relationAlias);
-        $relatedModel || $relatedModel = $this->createFromRelatedConcept($relationAlias);
+        $relatedModel || (!$this->isRecursive() && $relatedModel = $this->createFromRelatedConcept($relationAlias));
         $relatedModel || $relatedModel = $this->createFromFactory($relationName);
 
         return $relatedModel;
+    }
+
+    /**
+     * @return bool
+     */
+    protected function isRecursive()
+    {
+        $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+        $classes = array_column($backtrace, 'class');
+
+        while (end($classes) == static::class) {
+            array_pop($classes);
+        }
+
+        $isRecursive = in_array(static::class, $classes);
+
+        return $isRecursive;
     }
 
     /**
@@ -391,17 +398,17 @@ abstract class Concept
         $factoryBuilder = factory($modelName);
 
         try {
-            /** @var Model $relatedModel */
+            /** @var Model $model */
             $model = $factoryBuilder->make($attributes);
             $model = ($model instanceof EloquentCollection) ? $model->first() : $model;
             $this->bucket->addAction($model);
             $model->save();
         } catch (QueryException $error) {
             if (!in_array($error->getCode(), [
-                22003,  //Number out of range
-                23000,  //Duplicate key value
-                22001   //String too long
-            ]) || !method_exists($factoryBuilder, 'getLastUsedSource')) {
+                    22003,  //Number out of range
+                    23000,  //Duplicate key value
+                    22001   //String too long
+                ]) || !method_exists($factoryBuilder, 'getLastUsedSource')) {
                 throw $error;
             }
 
@@ -470,7 +477,7 @@ abstract class Concept
      */
     public function getModel()
     {
-        return $this->model ?: $this->createModel();
+        return $this->model;
     }
 
     /**
