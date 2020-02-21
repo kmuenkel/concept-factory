@@ -179,9 +179,9 @@ if (!function_exists('detach_delete')) {
             if ($relation instanceof Relations\BelongsToMany) {
                 $relation->sync([]);
             }
-
-            $forceDelete ? $model->forceDelete() : $model->delete();
         }
+
+        $forceDelete ? $model->forceDelete() : $model->delete();
     }
 }
 
