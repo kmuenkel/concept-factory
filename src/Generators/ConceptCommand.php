@@ -14,7 +14,7 @@ class ConceptCommand extends Command
     protected $signature = 'concept:generate
         {name? : The name of the concept to represent with new database records.}
         {--list : List all possible concepts that can be generated}
-        {-v : After generating a concept, list references to all records created rather than just the top-level one}';
+        {--v : After generating a concept, list references to all records created rather than just the top-level one}';
 
     /**
      * @var callable|null
@@ -44,34 +44,30 @@ class ConceptCommand extends Command
         }
 
         $concept = $this->generate($class);
-
         self::$eventCallback && (self::$eventCallback)($concept);
 
-        $this->info(PHP_EOL);
+        $bucket = $concept->getActionLog();
+        $actions = $bucket->flushActions();
+        $actions = !$verbose ? [array_pop($actions)] : $actions;
 
-        if ($verbose) {
-            $bucket = $concept->getActionLog();
-            $actions = $bucket->flushActions();
+        $newRecords = [];
+        foreach ($actions as $action) {
+            /**
+             * @var Model $model
+             * @var array $before
+             */
+            list('model' => $model, 'before' => $before) = $action;
+            $action = $before ? 'Updated' : 'Created';
+            $table = $model->getTable();
+            $keyName = $model->getKeyName();
+            $key = $model->getKey();
 
-            foreach ($actions as $action) {
-                list('model' => $model, 'before' => $before) = $action;
-                $action = $before ? 'Updated' : 'Created';
-                /** @var Model $model */
-                $model = app($model);
-                $table = $model->getTable();
-                $keyName = $model->getKeyName();
-                $key = $model->getKey();
-
-                $this->info("$action '$table' record where '$keyName' = '$key'.".PHP_EOL);
+            if (!in_array("$table@$key", $newRecords)) {
+                ($action == 'Created') && $newRecords[] = "$table@$key";
+                $logged["$table@$table"] = $action;
+                $this->info("$action '$table' record where '$keyName' = '$key'.");
             }
         }
-
-        $model = $concept->getModel();
-        $table = $model->getTable();
-        $keyName = $model->getKeyName();
-        $key = $model->getKey();
-
-        $this->info("Created '$table' record where '$keyName' = '$key'.".PHP_EOL);
     }
 
     /**

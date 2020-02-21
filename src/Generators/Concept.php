@@ -324,38 +324,29 @@ abstract class Concept
     public function createRelationship($relationName, $relationAlias = null)
     {
         $relationAlias = $relationAlias ?: $relationName;
+        $relatedModel = $placeholderModel = null;
 
-        $relatedModel = $this->relationLoaded($relationAlias) ? $this->getFromLibrary($relationAlias) : null;
-        ($relatedModel && $this->relationIsMany($relationName) && !$relatedModel instanceof Collection)
-            && $relatedModel = new Collection([$relatedModel]);
-        $relatedModel || (!$this->isRecursive()
-            && $this->hasRelatedConcept($relationAlias)
-            && $relatedModel = $this->createRelationFromConcept($relationAlias));
-        $relatedModel || ($this->hasRelatedModel($relationName)
-            && $relatedModel = $this->createRelationFromFactory($relationName));
+        if ($this->hasRelatedModel($relationName)) {
+            $relatedModel = $placeholderModel = $this->createRelationFromFactory($relationName);
+        }
+
+        if ($this->relationLoaded($relationAlias)) {
+            $relatedModel = $this->getFromLibrary($relationAlias);
+
+            if ($this->relationIsMany($relationName) && !$relatedModel instanceof Collection) {
+                $relatedModel = new Collection([$relatedModel]);
+                $placeholderModel && $relatedModel->push($placeholderModel);
+            }
+        } elseif ($this->hasRelatedConcept($relationAlias)) {
+            $placeholderModel && $this->appendLibrary($relatedModel, $relationAlias);
+            $relatedModel = $this->createRelationFromConcept($relationAlias);
+        }
 
         if (!$relatedModel) {
-            throw new UnexpectedValueException();
+            throw new UnexpectedValueException("Unable to find generator for '$relatedModel'.");
         }
 
         return $relatedModel;
-    }
-
-    /**
-     * @return bool
-     */
-    protected function isRecursive()
-    {
-        $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
-        $classes = array_column($backtrace, 'class');
-
-        while (end($classes) == static::class) {
-            array_pop($classes);
-        }
-
-        $isRecursive = in_array(static::class, $classes);
-
-        return $isRecursive;
     }
 
     /**
@@ -431,7 +422,7 @@ abstract class Concept
 
         $modelLibrary = $this->getModelLibrary();
         $concept = $concept->setModelLibrary($includeLibrary ? $modelLibrary : []);
-        $relatedModel = $concept->setInstances($instances)->create($attributes);
+        $relatedModel = $concept->create($attributes, $instances);
         $includeLibrary && $this->mergeLibrary($concept);
 
         return $relatedModel;
