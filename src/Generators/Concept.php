@@ -57,7 +57,7 @@ abstract class Concept
     /**
      * @var int
      */
-    protected $instances = 0;
+    protected $instances = 1;
 
     /**
      * @var Model[]
@@ -66,14 +66,17 @@ abstract class Concept
 
     /**
      * Concept constructor.
-     * @param array $attributes
+     * @param array|null $attributes
+     * @param int $instances
      */
-    public function __construct(array $attributes = null)
+    public function __construct(?array $attributes = null, ?int $instances = null)
     {
         $this->bucket = ConceptBucket::make();
         $this->attributes = !is_null($attributes) ? $attributes : $this->attributes;
         $placeholderModel = app($this->modelName);
         $this->setModel($placeholderModel);
+        $instances = !is_null($instances) ? $instances : $this->instances;
+        $this->setInstances($instances);
     }
 
     /**
@@ -90,7 +93,7 @@ abstract class Concept
      */
     public function setInstances(int $instances)
     {
-        $this->instances = ($instances > 0) ? $instances : $this->instances;
+        $this->instances = ($instances > 0) ? $instances : 1;
 
         return $this;
     }
@@ -154,17 +157,23 @@ abstract class Concept
 
     /**
      * @param array $attributes
-     * @return Model
+     * @return Model|Collection
      */
     public function create(array $attributes = [])
     {
-        $relationNames = $this->load();
-        $this->with($relationNames);
-        $relatedModels = $this->getLoaded();
-        $model = $this->createOrUpdate($attributes);
-        $this->relateModels($model, $relatedModels);
+        $counter = $this->instances;
+        $collection = new Collection;
 
-        return $model;
+        do {
+            $relationNames = $this->load();
+            $this->with($relationNames);
+            $relatedModels = $this->getLoaded();
+            $model = $this->createOrUpdate($attributes);
+            $collection->push($model);
+            $this->relateModels($model, $relatedModels);
+        } while (--$counter);
+
+        return ($this->instances > 1) ? $collection : $model;
     }
 
     /**
@@ -280,7 +289,7 @@ abstract class Concept
                 || $relation instanceof Relations\BelongsToMany));
 
         $collection = new Collection;
-        $counter = ($this->instances > 0) ? $this->instances : ($isMany ? 2 : 1);
+        $counter = $isMany ? 2 : 1;
 
         do {
             $relationModel = $this->createRelationship($relationName, $relationAlias);
