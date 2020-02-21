@@ -66,17 +66,15 @@ abstract class Concept
 
     /**
      * Concept constructor.
-     * @param array|null $attributes
+     * @param array $attributes
      * @param int $instances
      */
-    public function __construct(?array $attributes = null, ?int $instances = null)
+    public function __construct(array $attributes = [], int $instances = 0)
     {
         $this->bucket = ConceptBucket::make();
-        $this->attributes = !is_null($attributes) ? $attributes : $this->attributes;
-        $placeholderModel = app($this->modelName);
-        $this->setModel($placeholderModel);
-        $instances = !is_null($instances) ? $instances : $this->instances;
-        $this->setInstances($instances);
+        $this->setAttributes(array_merge($this->attributes, $attributes));
+        $this->setModel(app($this->modelName));
+        $this->setInstances($instances ?: $this->instances);
     }
 
     /**
@@ -93,9 +91,20 @@ abstract class Concept
      */
     public function setInstances(int $instances)
     {
-        $this->instances = ($instances > 0) ? $instances : 1;
+        $this->instances = $this->normalizeInstanceCounter($instances);
 
         return $this;
+    }
+
+    /**
+     * @param int|null $instances
+     * @return int
+     */
+    protected function normalizeInstanceCounter(?int $instances = null)
+    {
+        $instances = (int)$instances;
+
+        return ($instances > 0) ? $instances : 1;
     }
 
     /**
@@ -157,23 +166,23 @@ abstract class Concept
 
     /**
      * @param array $attributes
-     * @return Model|Collection
+     * @param int|null $instances
+     * @return Collection|Model
      */
-    public function create(array $attributes = [])
+    public function create(array $attributes = [], int $instances = null)
     {
-        $counter = $this->instances;
+        $counter = $instances = $this->normalizeInstanceCounter($instances ?: $this->instances);
         $collection = new Collection;
 
         do {
             $relationNames = $this->load();
-            $this->with($relationNames);
-            $relatedModels = $this->getLoaded();
+            $relatedModels = $this->with($relationNames)->getLoaded();
             $model = $this->createOrUpdate($attributes);
             $collection->push($model);
-            $this->relateModels($model, $relatedModels);
+            $this->relateModels($relatedModels);
         } while (--$counter);
 
-        return ($this->instances > 1) ? $collection : $model;
+        return ($instances > 1) ? $collection : $model;
     }
 
     /**
@@ -193,29 +202,31 @@ abstract class Concept
         $attributes = array_merge($this->attributes(), $attributes);
         $model = $this->getModel();
         $model->exists || $model = $this->createFirstFromFactory($this->modelName, $attributes);
-        $model->update($attributes);
+        $model->refresh()->update($attributes);
         $this->setModel($model);
 
         return $model;
     }
 
     /**
-     * @param Model $model
      * @param Model[]|Collection[] $relatedModels
      * @return Concept
      */
-    public function relateModels(Model $model, array $relatedModels)
+    public function relateModels(array $relatedModels)
     {
         foreach ($relatedModels as $relationName => $relatedModel) {
             if ($relatedModel instanceof Model) {
-                $this->relateModel($model, $relatedModel, $relationName);
+                $this->relateModel($relationName, $relatedModel);
+            } elseif ($relatedModel instanceof Collection) {
+                $relatedModel->each(function ($relatedModel) use ($relationName) {
+                    $this->relateModel($relationName, $relatedModel);
+                });
+            } else {
+                $type = get_type($relatedModel);
 
-                continue;
+                throw new UnexpectedValueException("All items for the second argument must be of type '".Model::class
+                    ."' or '".Collection::class."'. '$type' given.");
             }
-
-            $relatedModel->each(function ($relatedModel) use ($model, $relationName) {
-                $this->relateModel($model, $relatedModel, $relationName);
-            });
         }
 
         return $this;
@@ -229,7 +240,7 @@ abstract class Concept
     {
         foreach ($relationNames as $relationName => $relationAlias) {
             $relationName = is_int($relationName) ? $relationAlias : $relationName;
-            $this->relatedModels[$relationName] = $this->createRelationships($relationName, $relationAlias);
+            $this->relatedModels[$relationName] = $this->createRelationship($relationName, $relationAlias);
             $this->appendLibrary($this->relatedModels[$relationName], $relationAlias);
         }
 
@@ -237,22 +248,26 @@ abstract class Concept
     }
 
     /**
-     * @param Model $model
-     * @param Model $relatedModel
      * @param string $relationName
+     * @param Model $relatedModel
+     * @return $this
      */
-    protected function relateModel(Model $model, Model $relatedModel, $relationName)
+    public function relateModel($relationName, Model $relatedModel)
     {
-        $before = $model->refresh()->getAttributes();
+        $model = $this->createOrUpdate();
+        $before = $model->getAttributes();
+
         try {
             relate_models($model, $relatedModel, $relationName);
         } catch (BadMethodCallException $error) {
             //
         }
-        $after = $model->getAttributes();
 
+        $after = $model->getAttributes();
         $bucket = $this->getActionLog();
         $bucket->addAction($model, $before, $after);
+
+        return $this;
     }
 
     /**
@@ -276,10 +291,9 @@ abstract class Concept
 
     /**
      * @param string $relationName
-     * @param string|null $relationAlias
-     * @return Collection|Model
+     * @return bool
      */
-    public function createRelationships($relationName, $relationAlias = null)
+    public function relationIsMany($relationName)
     {
         $model = $this->getModel();
         /** @var Relations\Relation $relation */
@@ -288,16 +302,7 @@ abstract class Concept
                 || $relation instanceof Relations\MorphMany
                 || $relation instanceof Relations\BelongsToMany));
 
-        $collection = new Collection;
-        $counter = $isMany ? 2 : 1;
-
-        do {
-            $relationModel = $this->createRelationship($relationName, $relationAlias);
-            ($relationModel instanceof Model) ? $collection->push($relationModel)
-                : $collection = $collection->merge($relationModel);
-        } while ($isMany && --$counter);
-
-        return $isMany ? $collection : $collection->first();
+        return $isMany;
     }
 
     /**
@@ -313,19 +318,6 @@ abstract class Concept
 
     /**
      * @param string $relationName
-     * @return bool
-     */
-    public function hasRelation($relationName)
-    {
-        $load = $this->load();
-        $relationAlias = $load[$relationName] ?? $relationName;
-
-        return $this->relationLoaded($relationAlias) || $this->hasRelatedConcept($relationAlias)
-            || $this->hasRelatedModel($relationName);
-    }
-
-    /**
-     * @param string $relationName
      * @param string|null $relationAlias
      * @return Model|Collection
      */
@@ -333,7 +325,9 @@ abstract class Concept
     {
         $relationAlias = $relationAlias ?: $relationName;
 
-        $relatedModel = $this->getFromLibrary($relationAlias);
+        $relatedModel = $this->relationLoaded($relationAlias) ? $this->getFromLibrary($relationAlias) : null;
+        ($relatedModel && $this->relationIsMany($relationName) && !$relatedModel instanceof Collection)
+            && $relatedModel = new Collection([$relatedModel]);
         $relatedModel || (!$this->isRecursive()
             && $this->hasRelatedConcept($relationAlias)
             && $relatedModel = $this->createRelationFromConcept($relationAlias));
@@ -342,7 +336,7 @@ abstract class Concept
 
         if (!$relatedModel) {
             throw new UnexpectedValueException();
-        };
+        }
 
         return $relatedModel;
     }
@@ -416,7 +410,7 @@ abstract class Concept
      * @param string $relationName
      * @param array $attributes
      * @param bool $includeLibrary
-     * @return Model|null
+     * @return Model
      */
     public function createRelationFromConcept($relationName, array $attributes = [], $includeLibrary = true)
     {
@@ -425,29 +419,39 @@ abstract class Concept
         if ($concept instanceof Model) {
             return $concept;
         } elseif (!($concept instanceof Concept)) {
-            $call = get_class($this).'::'.$relationName;
-            $type = (($type = gettype($concept)) == 'object') ? get_class($concept) : $type;
+            $call = get_class($this).'::'.$relationName.'()';
+            $type = get_type($concept);
 
             throw new UnexpectedValueException("Response type for '$call' expected to be '".Concept::class."'. "
                 ."'$type' given.");
         }
 
-        $modelLibrary = $this->getFromLibrary();
+        $instances = !$this->relationIsMany($relationName) ? 1
+            : (($instances = $concept->getInstances()) == 1 ? 2 : $instances);
+
+        $modelLibrary = $this->getModelLibrary();
         $concept = $concept->setModelLibrary($includeLibrary ? $modelLibrary : []);
-        $relatedModel = $concept->create($attributes);
+        $relatedModel = $concept->setInstances($instances)->create($attributes);
         $includeLibrary && $this->mergeLibrary($concept);
 
         return $relatedModel;
     }
 
     /**
+     * @return int
+     */
+    public function getInstances()
+    {
+        return $this->instances;
+    }
+
+    /**
      * @param $relationName
-     * @param Model|null $model
      * @return bool
      */
-    public function hasRelatedModel($relationName, Model $model = null)
+    public function hasRelatedModel($relationName)
     {
-        $model = $model ?: $this->getModel();
+        $model = $this->getModel();
 
         return method_exists($model, $relationName);
     }
@@ -464,7 +468,8 @@ abstract class Concept
         /** @var Relations\Relation $relation */
         $relation = $model->$relationName();
         $relationModelName = get_class($relation->getModel());
-        $relatedModel = $this->createFirstFromFactory($relationModelName, $attributes);
+        $instances = $this->relationIsMany($relationName) ? 2 : 1;
+        $relatedModel = $this->createFirstFromFactory($relationModelName, $attributes, $instances);
 
         return $relatedModel;
     }
@@ -472,12 +477,13 @@ abstract class Concept
     /**
      * @param string $modelName
      * @param array $attributes
+     * @param int $instances
      * @return Model
      */
-    public function createFirstFromFactory($modelName, array $attributes = [])
+    public function createFirstFromFactory($modelName, array $attributes = [], int $instances = 1)
     {
         /** @var FactoryBuilder $factoryBuilder */
-        $factoryBuilder = factory($modelName);
+        $factoryBuilder = factory($modelName, $instances);
 
         try {
             /** @var Model $model */
@@ -539,7 +545,8 @@ abstract class Concept
     public function appendLibrary($relatedModel, $relationAlias)
     {
         if (!($relatedModel instanceof Model) && !($relatedModel instanceof Collection)) {
-            $type = (($type = gettype($relatedModel)) == 'object') ? get_class($relatedModel) : $type;
+            $type = get_type($relatedModel);
+
             throw new InvalidArgumentException('First argument must be an instance of '.Model::class. ' or '
                 .Collection::class.". '$type' given.");
         }

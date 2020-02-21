@@ -184,3 +184,16 @@ if (!function_exists('detach_delete')) {
         }
     }
 }
+
+if (!function_exists('get_type')) {
+    /**
+     * @param mixed $item
+     * @return string
+     */
+    function get_type($item)
+    {
+        $type = (($type = gettype($item)) == 'object') ? get_class($item) : $type;
+
+        return $type;
+    }
+}
