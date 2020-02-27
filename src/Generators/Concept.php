@@ -327,13 +327,23 @@ abstract class Concept
         $relatedModel = $placeholderModel = null;
 
         if ($this->hasRelatedModel($relationName)) {
-            $relatedModel = $placeholderModel = $this->createRelationFromFactory($relationName);
+            try {
+                $relatedModel = $placeholderModel = $this->createRelationFromFactory($relationName);
+            } catch (InvalidDefinitionException $error) {
+                $previous = $error->getPrevious();
+
+                if ($error->getCode() != 23000 && (!$previous || $previous->getCode() != 23000)) {
+                    throw $error;
+                }
+
+                //
+            }
         }
 
         if ($this->relationLoaded($relationAlias)) {
             $relatedModel = $this->getFromLibrary($relationAlias);
 
-            if ($this->relationIsMany($relationName) && !$relatedModel instanceof Collection) {
+            if ($this->relationIsMany($relationName) && $relatedModel instanceof Model) {
                 $relatedModel = new Collection([$relatedModel]);
                 $placeholderModel && $relatedModel->push($placeholderModel);
             }
