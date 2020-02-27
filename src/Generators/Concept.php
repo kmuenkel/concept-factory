@@ -335,8 +335,6 @@ abstract class Concept
                 if ($error->getCode() != 23000 && (!$previous || $previous->getCode() != 23000)) {
                     throw $error;
                 }
-
-                //
             }
         }
 
