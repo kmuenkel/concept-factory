@@ -261,6 +261,10 @@ abstract class Concept
             relate_models($model, $relatedModel, $relationName);
         } catch (BadMethodCallException $error) {
             //
+        } catch (QueryException $error) {
+            if ($error->getCode() != 23000) {
+                throw $error;
+            }
         }
 
         $after = $model->getAttributes();
@@ -351,7 +355,7 @@ abstract class Concept
         }
 
         if (!$relatedModel) {
-            throw new UnexpectedValueException("Unable to find generator for '$relatedModel'.");
+            throw new UnexpectedValueException("Unable to find generator for Model '$relatedModel', relation '$relationAlias' in '".static::class."'.");
         }
 
         return $relatedModel;
