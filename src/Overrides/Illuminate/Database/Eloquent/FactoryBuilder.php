@@ -11,9 +11,9 @@ use Illuminate\Database\Eloquent\FactoryBuilder as BaseFactoryBuilder;
 class FactoryBuilder extends BaseFactoryBuilder
 {
     /**
-     * @var array
+     * @var string
      */
-    protected $lastDefinitionUsed = [];
+    protected $lastDefinitionUsed = '';
 
     /**
      * @var array
@@ -25,7 +25,7 @@ class FactoryBuilder extends BaseFactoryBuilder
      */
     protected function getRawAttributes(array $attributes = [])
     {
-        $this->lastDefinitionUsed = [$this->class, $this->name];
+        $this->lastDefinitionUsed = $this->class;
 
         return parent::getRawAttributes($attributes);
     }
@@ -46,14 +46,9 @@ class FactoryBuilder extends BaseFactoryBuilder
      */
     public function getLastUsedSource()
     {
-        /**
-         * @var string $class
-         * @var string $name
-         */
-        list($class, $name) = $this->lastDefinitionUsed;
+        $class = $this->lastDefinitionUsed;
         $location = $this->sources[$class] ?? [];
-        $location = $location[$name] ?? null;
 
-        return compact('class', 'name', 'location');
+        return compact('class', 'location');
     }
 }

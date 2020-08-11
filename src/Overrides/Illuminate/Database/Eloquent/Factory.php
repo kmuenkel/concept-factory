@@ -18,10 +18,10 @@ class Factory extends BaseFactory
     /**
      * {@inheritDoc}
      */
-    public function of($class, $name = 'default')
+    public function of($class)
     {
         return (new FactoryBuilder(
-            $class, $name, $this->definitions, $this->states,
+            $class, $this->definitions, $this->states,
             $this->afterMaking, $this->afterCreating, $this->faker
         ))->setSources($this->sources);
     }
@@ -29,15 +29,15 @@ class Factory extends BaseFactory
     /**
      * {@inheritDoc}
      */
-    public function define($class, callable $attributes, $name = 'default')
+    public function define($class, callable $attributes)
     {
         [$caller] = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1);
         $file = $caller['file'] ?? null;
         $line = $caller['line'] ?? null;
         $location =  implode(':', array_filter([$file, $line]));
-        $this->sources[$class][$name] = $location;
+        $this->sources[$class] = $location;
 
-        $this->definitions[$class][$name] = $attributes;
+        $this->definitions[$class] = $attributes;
 
         return $this;
     }

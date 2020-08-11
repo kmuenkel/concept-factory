@@ -509,7 +509,7 @@ abstract class Concept
                 return (string)$item;
             }, $source);
 
-            throw InvalidDefinitionException::make($source['class'], $source['name'], $source['location'], $error);
+            throw InvalidDefinitionException::make($source['class'], $source['location'], $error);
         }
 
         return $model;

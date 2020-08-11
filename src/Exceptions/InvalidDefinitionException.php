@@ -19,24 +19,18 @@ class InvalidDefinitionException extends RuntimeException
     /**
      * @var string
      */
-    protected $name = '';
-
-    /**
-     * @var string
-     */
     protected $location = '';
 
     /**
      * @param string $class
-     * @param string $name
      * @param string $location
      * @param Throwable|null $previous
      * @return InvalidDefinitionException
      */
-    public static function make($class, $name, $location, Throwable $previous = null)
+    public static function make($class, $location, Throwable $previous = null)
     {
-        $instance = new static("Invalid attributes set by '$class@$name' from '$location'.", 0, $previous);
-        $instance->setClass($class)->setName($name)->setLocation($location);
+        $instance = new static("Invalid attributes set by '$class' from '$location'.", 0, $previous);
+        $instance->setClass($class)->setLocation($location);
 
         return $instance;
     }
@@ -48,17 +42,6 @@ class InvalidDefinitionException extends RuntimeException
     public function setClass(string $class)
     {
         $this->class = $class;
-
-        return $this;
-    }
-
-    /**
-     * @param string $name
-     * @return $this
-     */
-    public function setName(string $name)
-    {
-        $this->name = $name;
 
         return $this;
     }
@@ -80,14 +63,6 @@ class InvalidDefinitionException extends RuntimeException
     public function getClass(): string
     {
         return $this->class;
-    }
-
-    /**
-     * @return string
-     */
-    public function getName(): string
-    {
-        return $this->name;
     }
 
     /**
