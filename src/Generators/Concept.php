@@ -3,6 +3,7 @@
 namespace Concept\Generators;
 
 use BadMethodCallException;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use UnexpectedValueException;
 use Concept\Logging\ConceptBucket;
@@ -65,16 +66,33 @@ abstract class Concept
     protected $relatedModels = [];
 
     /**
+     * @var string
+     */
+    protected $name;
+
+    /**
      * Concept constructor.
      * @param array $attributes
      * @param int $instances
      */
-    public function __construct(array $attributes = [], int $instances = 0)
+    public function __construct(array $attributes = [], int $instances = 0, $name = null)
     {
         $this->bucket = ConceptBucket::make();
         $this->setAttributes(array_merge($this->attributes, $attributes));
         $this->setModel(app($this->modelName));
         $this->setInstances($instances ?: $this->instances);
+        $this->name = $name ?: Str::camel(class_basename(static::class));
+    }
+
+    /**
+     * @param string $name
+     * @return $this
+     */
+    public function setName($name)
+    {
+        $this->name = $name;
+
+        return $this;
     }
 
     /**
@@ -176,13 +194,17 @@ abstract class Concept
 
         do {
             $relationNames = $this->load();
-            $relatedModels = $this->with($relationNames)->getLoaded();
             $model = $this->createOrUpdate($attributes);
             $collection->push($model);
+
+            $models = ($instances > 1) ? $collection : $model;
+            $this->appendLibrary($models, $this->name);
+
+            $relatedModels = $this->with($relationNames)->getLoaded();
             $this->relateModels($relatedModels);
         } while (--$counter);
 
-        return ($instances > 1) ? $collection : $model;
+        return $models;
     }
 
     /**
@@ -240,6 +262,9 @@ abstract class Concept
     {
         foreach ($relationNames as $relationName => $relationAlias) {
             $relationName = is_int($relationName) ? $relationAlias : $relationName;
+            $relationName = $this->inferRelationName($relationName);
+            $relationAlias = $this->inferRelationAlias($relationAlias);
+
             $this->relatedModels[$relationName] = $this->createRelationship($relationName, $relationAlias);
             $this->appendLibrary($this->relatedModels[$relationName], $relationAlias);
         }
@@ -317,7 +342,23 @@ abstract class Concept
     {
         $library = $this->getModelLibrary();
 
-        return array_key_exists($relationName, $library);
+        return $library->has($relationName);
+    }
+
+    /**
+     * @param string $relationAlias
+     * @return bool
+     */
+    protected function inferRelationAlias($relationName)
+    {
+        $singular = Str::singular($relationName);
+        $plural = Str::plural($relationName);
+
+        $transformedName = $this->relationLoaded($relationName) ? $relationName : null;
+        $transformedName = (!$transformedName && $this->relationLoaded($singular)) ? $singular : $transformedName;
+        $transformedName = (!$transformedName && $this->relationLoaded($plural)) ? $plural : $transformedName;
+
+        return $transformedName ?: $relationName;
     }
 
     /**
@@ -328,34 +369,21 @@ abstract class Concept
     public function createRelationship($relationName, $relationAlias = null)
     {
         $relationAlias = $relationAlias ?: $relationName;
-        $relatedModel = $placeholderModel = null;
-
-        if ($this->hasRelatedModel($relationName)) {
-            try {
-                $relatedModel = $placeholderModel = $this->createRelationFromFactory($relationName);
-            } catch (InvalidDefinitionException $error) {
-                $previous = $error->getPrevious();
-
-                if ($error->getCode() != 23000 && (!$previous || $previous->getCode() != 23000)) {
-                    throw $error;
-                }
-            }
-        }
+        $relatedModel = null;
 
         if ($this->relationLoaded($relationAlias)) {
             $relatedModel = $this->getFromLibrary($relationAlias);
-
             if ($this->relationIsMany($relationName) && $relatedModel instanceof Model) {
                 $relatedModel = new Collection([$relatedModel]);
-                $placeholderModel && $relatedModel->push($placeholderModel);
             }
         } elseif ($this->hasRelatedConcept($relationAlias)) {
-            $placeholderModel && $this->appendLibrary($relatedModel, $relationAlias);
             $relatedModel = $this->createRelationFromConcept($relationAlias);
+        } elseif ($this->hasRelatedModel($relationName)) {
+            $relatedModel = $this->createRelationFromFactory($relationName);
         }
 
         if (!$relatedModel) {
-            throw new UnexpectedValueException("Unable to find generator for Model '$relatedModel', relation '$relationAlias' in '".static::class."'.");
+            throw new UnexpectedValueException("Unable to find generator for Model relation '$relationAlias' in '".static::class."'.");
         }
 
         return $relatedModel;
@@ -369,7 +397,7 @@ abstract class Concept
     public function getFromLibrary($relationName, ?int $index = null)
     {
         $library = $this->getModelLibrary();
-        $relatedModel = $library[$relationName] ?? null;
+        $relatedModel = $library->get($relationName);
         (!is_null($index) && $relatedModel instanceof Collection) && $relatedModel = $relatedModel->get($index);
 
         return $relatedModel;
@@ -410,12 +438,11 @@ abstract class Concept
     }
 
     /**
-     * @param string $relationName
-     * @param array $attributes
-     * @param bool $includeLibrary
-     * @return Model
+     * @param $relationName
+     * @param Model|null $baseModel
+     * @return Collection|Model
      */
-    public function createRelationFromConcept($relationName, array $attributes = [], $includeLibrary = true)
+    public function createRelationFromConcept($relationName, Model $baseModel = null)
     {
         $concept = $this->$relationName();
 
@@ -429,13 +456,16 @@ abstract class Concept
                 ."'$type' given.");
         }
 
+        $concept->setName($relationName);
+
         $instances = !$this->relationIsMany($relationName) ? 1
             : (($instances = $concept->getInstances()) == 1 ? 2 : $instances);
 
         $modelLibrary = $this->getModelLibrary();
-        $concept = $concept->setModelLibrary($includeLibrary ? $modelLibrary : []);
-        $relatedModel = $concept->create($attributes, $instances);
-        $includeLibrary && $this->mergeLibrary($concept);
+        $concept = $concept->setModelLibrary($modelLibrary);
+        $baseModel && $concept->setModel($baseModel);
+        $relatedModel = $concept->create([], $instances);
+        $this->mergeLibrary($concept);
 
         return $relatedModel;
     }
@@ -457,6 +487,22 @@ abstract class Concept
         $model = $this->getModel();
 
         return method_exists($model, $relationName);
+    }
+
+    /**
+     * @param string $relationName
+     * @return bool
+     */
+    protected function inferRelationName($relationName)
+    {
+        $singular = Str::singular($relationName);
+        $plural = Str::plural($relationName);
+
+        $transformedName = $this->hasRelatedModel($relationName) ? $relationName : null;
+        $transformedName = (!$transformedName && $this->hasRelatedModel($singular)) ? $singular : $transformedName;
+        $transformedName = (!$transformedName && $this->hasRelatedModel($plural)) ? $plural : $transformedName;
+
+        return $transformedName ?: $relationName;
     }
 
     /**
@@ -523,18 +569,19 @@ abstract class Concept
     {
         $modelLibrary = $this->getModelLibrary();
         $relatedLibrary = $concept->getModelLibrary();
-        $modelLibrary = array_merge($modelLibrary, $relatedLibrary);
-        $this->setModelLibrary($modelLibrary);
+        $modelLibrary = $modelLibrary->merge($relatedLibrary);
+        $this->setModelLibrary($modelLibrary->all());
 
         return $this;
     }
 
     /**
-     * @param Model[] $modelLibrary
+     * @param array|Collection|Model[]|Collection[] $modelLibrary
      * @return $this
      */
-    public function setModelLibrary(array $modelLibrary)
+    public function setModelLibrary($modelLibrary)
     {
+        $modelLibrary = $modelLibrary instanceof Collection ? $modelLibrary->all() : $modelLibrary;
         $this->modelLibrary = $modelLibrary;
 
         return $this;
@@ -542,10 +589,10 @@ abstract class Concept
 
     /**
      * @param Model|Collection $relatedModel
-     * @param string $relationAlias
+     * @param string|null $relationAlias
      * @return $this
      */
-    public function appendLibrary($relatedModel, $relationAlias)
+    public function appendLibrary($relatedModel, $relationAlias = null)
     {
         if (!($relatedModel instanceof Model) && !($relatedModel instanceof Collection)) {
             $type = get_type($relatedModel);
@@ -554,17 +601,19 @@ abstract class Concept
                 .Collection::class.". '$type' given.");
         }
 
+        $defaultAlias = get_class($relatedModel instanceof Model ? $relatedModel : $relatedModel->first());
+        $relationAlias = $relationAlias ?: $defaultAlias;
         $this->modelLibrary[$relationAlias] = $relatedModel;
 
         return $this;
     }
 
     /**
-     * @return Model[]|Collection[]
+     * @return Collection|Model[]|Collection[]
      */
     public function getModelLibrary()
     {
-        return $this->modelLibrary;
+        return collect($this->modelLibrary);
     }
 
     /**
