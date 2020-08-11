@@ -156,7 +156,23 @@ if (!function_exists('relate_models')) {
 
             $relation->match([$model], $relationships, $relationName);
         } elseif ($relation instanceof Relations\BelongsToMany) {
-            $relation->attach($relatedModel);
+            $attributes = [];
+
+            if ($relation instanceof Relations\MorphToMany) {
+                foreach ($relation->getQuery()->getQuery()->wheres as $where) {
+                    $conditionValidAssignment = $where['type'] == 'Basic' && $where['operator'] == '=';
+                    $alreadyApplied = $where['column'] == $relation->getTable().'.'.$relation->getMorphType();
+                    $alreadyApplied |= $where['column'] == $relation->getMorphType();
+                    $alreadyApplied |= $where['column'] == $relation->getQualifiedForeignPivotKeyName();
+                    $alreadyApplied |= $where['column'] == $relation->getForeignPivotKeyName();
+
+                    if ($conditionValidAssignment && !$alreadyApplied) {
+                        $attributes[$where['column']] = $where['value'];
+                    }
+                }
+            }
+
+            $relation->attach($relatedModel, $attributes);
         } else {
             throw new InvalidArgumentException('Unsupported relation type ' . get_class($relation));
         }
